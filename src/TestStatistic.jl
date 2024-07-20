@@ -42,7 +42,6 @@ function get_h_vec!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64)
     
     end
 
-   
     for i = mmax+1:N
         for j = mmax+1:N
             if j != i
@@ -70,6 +69,7 @@ function get_h_vec!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64)
     return h
 end
 
+
 function HAC_variance(h, N, m, w)
     K = floor(Int, sqrt(sqrt(N)))
 
@@ -88,6 +88,7 @@ end
 function estimate_tv_tstats(obj, s1, s2)
     # Pre-compute weights and the h vector outside the loop
     weights_vec = [weights!((i, obj.ssize), obj.γ, obj.weights, obj.filter) for i in s1:s2]
+
     h_vec = get_h_vec!(obj.x, obj.y, obj.ssize, obj.lags, obj.lags, obj.ϵ)
 
     # Initialize the numerators and vars arrays
