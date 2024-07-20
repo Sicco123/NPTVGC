@@ -7,7 +7,6 @@ using LinearAlgebra
 using Distributed
 using ARCHModels
 using Printf
-using Metal
 
 include("Test.jl")
 include("Weights.jl")
