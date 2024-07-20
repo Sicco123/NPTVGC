@@ -58,7 +58,7 @@ using Test
    y = NPTVGC.normalise(y)
 
    test = NPTVGC.NPTVGC_test(y, x)
-   NPTVGC.estimate_tv_tstats(test, 1, 2)
+   NPTVGC.estimate_tv_tstats(test, 1)
    # test stat equal to 0.13 with 0.01 uncertainty
    @test test.Tstats[1] ≈ 0.13 atol=0.01
 end

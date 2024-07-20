@@ -85,7 +85,12 @@ function HAC_variance(h, N, m, w)
     return VT2
 end
 
-function estimate_tv_tstats(obj, s1, s2)
+function estimate_tv_tstats(obj, s1, s2 = nothing)
+
+    if s2 === nothing
+        s2 = s1
+    end 
+
     # Pre-compute weights and the h vector outside the loop
     weights_vec = [weights!((i, obj.ssize), obj.γ, obj.weights, obj.filter) for i in s1:s2]
 
