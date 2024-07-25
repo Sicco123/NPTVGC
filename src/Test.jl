@@ -15,6 +15,7 @@ mutable struct NPTVGC_test
     cores::Int
 
     function NPTVGC_test(x::Vector{Float64}, y::Vector{Float64})
+        # H0: y does not Granger-cause x
         ssize = length(x)
         lags = 1  # Assuming x and y are dimensions
         dates = collect(1:ssize)

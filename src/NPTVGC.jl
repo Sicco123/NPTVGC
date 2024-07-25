@@ -1,5 +1,7 @@
 module NPTVGC
 
+# Testing the null hypothesis that y does not Granger-cause x
+
 # Place all your imports here
 using Distributions
 using Random

@@ -1,16 +1,17 @@
 using NPTVGC
 using Test
 
+
 @testset "NPTVGC.jl" begin
     # Write your tests here.
 
     @test NPTVGC.weights!((1, 1), 1.0, "e", "smoothing") == [1]
 
     # create struct object
-    test = NPTVGC.NPTVGC_test([1.0, 2.0, 3.0], [0.0, 1.0, 2.0])
-    @test  test.x == [1.0, 2.0, 3.0]
+    test_obj = NPTVGC.NPTVGC_test([1.0, 2.0, 3.0], [0.0, 1.0, 2.0])
+    @test  test_obj.x == [1.0, 2.0, 3.0]
 
-    @test NPTVGC.estimate_tv_tstats(test, 1, 2) == nothing
+    @test NPTVGC.estimate_tv_tstats(test_obj, 1, 2) == nothing
     
     x = [3.6133192031340955e-001,
     3.6133192031340955e-001,
@@ -57,8 +58,8 @@ using Test
    x = NPTVGC.normalise(x)
    y = NPTVGC.normalise(y)
 
-   test = NPTVGC.NPTVGC_test(y, x)
-   NPTVGC.estimate_tv_tstats(test, 1)
+   test_obj = NPTVGC.NPTVGC_test(y, x)
+   NPTVGC.estimate_tv_tstats(test_obj, 1)
    # test stat equal to 0.13 with 0.01 uncertainty
-   @test test.Tstats[1] ≈ 0.13 atol=0.01
+   @test test_obj.Tstats[1] ≈ 0.13 atol=0.01
 end

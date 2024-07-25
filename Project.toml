@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [deps]
 ARCHModels = "6d3278bc-c23a-5105-85e5-0d57d2bf684f"
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
