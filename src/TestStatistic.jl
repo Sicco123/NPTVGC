@@ -267,7 +267,7 @@ function estimate_tv_tstats(obj, s1, s2 = nothing)
     weights_vec = [weights!((i, obj.ssize), obj.γ, obj.weights, obj.filter) for i in s1:s2]
 
     
-    h_vec = get_h_vec!(obj.x, obj.y, obj.ssize, obj.lags, obj.lags, obj.ϵ, weights_vec)
+    h_vec = get_h_vec_weighted!(obj.x, obj.y, obj.ssize, obj.lags, obj.lags, obj.ϵ, weights_vec)
 
     # Initialize the numerators and vars arrays
     numerators = similar(h_vec)  # Using similar to allocate space
