@@ -15,7 +15,7 @@ function lik_cv(obj, pv)
 end
 
 
-function total_likelihoods!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64, weights)
+function total_likelihoods!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64, w)
     
     mu = (2.0 * ϵ)^(m + 2 * mmax + 1)
     Cy = zeros(Float64, N)
@@ -36,20 +36,18 @@ function total_likelihoods!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64, weight
                     disy = max(abs(y[i-s] - y[j-s]), disy)
                 end
                 if disy <= ϵ
-                    Cy[i] += 1
-                    disx <= ϵ && (Cxy[i] += 1)
+                    dc = w[i][j]*1
+                    Cy[i] += dc
+                    disx <= ϵ && (Cxy[i] += dc)
                     disz = max(abs(y[i] - y[j]), disy)
                     if disz <= ϵ
-                        Cyz[i] += 1
-                        disx <= ϵ && (Cxyz[i] += 1)
+                        Cyz[i] += dc
+                        disx <= ϵ && (Cxyz[i] += dc)
                     end
                 end
             end
         end
-        Cy[i] /= N - mmax
-        Cxy[i] /= N - mmax
-        Cyz[i] /= N - mmax
-        Cxyz[i] /= N - mmax
+      
         h[i] += 2.0 / mu * (Cxyz[i] + Cy[i] + Cxy[i] + Cyz[i]) 
     
     end

@@ -106,8 +106,8 @@ end
 
 @testset "estimate_LDE tests" begin
     # Define your test inputs here
-    x = randn(100)
-    y = randn(100)
+    x = randn(20)
+    y = randn(20)
     x = NPTVGC.normalise(x)
     y = NPTVGC.normalise(y)
     obj = NPTVGC.NPTVGC_test(x, y)  # Replace with the actual type of your object
