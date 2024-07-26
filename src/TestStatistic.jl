@@ -112,7 +112,6 @@ function get_h_vec_weighted!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64, w)
     end
 
     for i = mmax+1:N
-        w_i = w[i]
         for j = mmax+1:N
             if j != i
                 IYij = IXYij = IYZij = IXYZij = 0
@@ -124,7 +123,7 @@ function get_h_vec_weighted!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64, w)
                     disy = max(abs(y[i-s] - y[j-s]), disy)
                 end
                 if disy <= ϵ
-                    dc = w_i[i][j]*1 # weighted density contributons
+                    dc = w[i][j]*1 # weighted density contributons
                     IYij = dc
                     disx <= ϵ && (IXYij = dc)
                     disz = max(abs(y[i] - y[j]), disy)
