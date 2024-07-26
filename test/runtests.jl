@@ -11,7 +11,7 @@ using Test
     test_obj = NPTVGC.NPTVGC_test([1.0, 2.0, 3.0], [0.0, 1.0, 2.0])
     @test  test_obj.x == [1.0, 2.0, 3.0]
 
-    @test NPTVGC.estimate_tv_tstats(test_obj, 1, 2) == nothing
+    @test NPTVGC.estimate_tv_tstats(test_obj, 1) == nothing
     
     x = [3.6133192031340955e-001,
     3.6133192031340955e-001,
@@ -63,5 +63,67 @@ using Test
    # test stat equal to 0.13 with 0.01 uncertainty
    @test test_obj.Tstats[1] ≈ 0.13 atol=0.01
 
-   
+   @testset "total_likelihoods! tests" begin
+    # Define your test inputs here
+    x = randn(100)
+    y = randn(100)
+    x = NPTVGC.normalise(x)
+    y = NPTVGC.normalise(y)
+    N = 100
+    m = 1
+    mmax = 1
+    ϵ = 0.5
+    weights = rand(100)
+
+    # Test that total_likelihoods! does not throw an error
+    @test try
+        liks = NPTVGC.total_likelihoods!(x, y, N, m, mmax, ϵ, weights)
+        println(liks)
+        true
+    catch e
+        println("Error: ", e)
+        false
+    end
+    end
+
+@testset "lik_cv tests" begin
+    # Define your test inputs here
+    x = randn(100)
+    y = randn(100)
+    x = NPTVGC.normalise(x)
+    y = NPTVGC.normalise(y)
+    obj = NPTVGC.NPTVGC_test(x,y)
+    # Test that lik_cv does not throw an error
+    @test try
+        lik = NPTVGC.lik_cv(obj,  (1.0, 0.5))
+        println(lik)
+        true
+    catch e
+        println("Error: ", e)
+        false
+    end
 end
+
+@testset "estimate_LDE tests" begin
+    # Define your test inputs here
+    x = randn(100)
+    y = randn(100)
+    x = NPTVGC.normalise(x)
+    y = NPTVGC.normalise(y)
+    obj = NPTVGC.NPTVGC_test(x, y)  # Replace with the actual type of your object
+    obj.filter = "smoothing"
+    obj.max_iter = 2
+    obj.max_iter_outer = 2
+    # Set other properties of obj as needed
+
+    # Test that estimate_LDE does not throw an error
+    @test try
+        NPTVGC.estimate_LDE(obj)
+        true
+    catch e
+        println("Error: ", e)
+        false
+    end
+end
+end
+

@@ -256,12 +256,9 @@ end
 #     return
 # end
 
-function estimate_tv_tstats(obj, s1, s2 = nothing)
+function estimate_tv_tstats(obj, s1)
     # test for y does not cause x
-
-    if s2 === nothing
-        s2 = s1
-    end 
+    s2 = obj.ssize
 
     # Pre-compute weights and the h vector outside the loop
     weights_vec = [weights!((i, obj.ssize), obj.γ, obj.weights, obj.filter) for i in s1:s2]

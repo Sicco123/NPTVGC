@@ -9,6 +9,7 @@ using LinearAlgebra
 using Distributed
 using ARCHModels
 using Printf
+using Optim
 
 include("Test.jl")
 include("Weights.jl")
