@@ -112,6 +112,7 @@ function get_h_vec_weighted!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64, w)
     end
 
     for i = mmax+1:N
+        w_i = w[i]
         for j = mmax+1:N
             if j != i
                 IYij = IXYij = IYZij = IXYZij = 0
