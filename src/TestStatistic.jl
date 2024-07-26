@@ -275,7 +275,7 @@ function estimate_tv_tstats(obj, s1, s2 = nothing)
 
     # Compute numerators and vars in a single loop
     for (idx, weights) in enumerate(weights_vec)
-        numerators[idx] = sum(h_vec[obj.lags+1:end])/(obj.ssize - obj.lags)
+        numerators[idx] = sum(h_vec[obj.lags+1:end] .* weights[obj.lags+1:end])#/(obj.ssize - obj.lags)
         h_vec_adjusted = h_vec .- numerators[idx]  # Adjust h_vec inplace if possible
         vars[idx] = HAC_variance(h_vec_adjusted, obj.ssize, obj.lags, weights)
     end
