@@ -62,4 +62,6 @@ using Test
    NPTVGC.estimate_tv_tstats(test_obj, 1)
    # test stat equal to 0.13 with 0.01 uncertainty
    @test test_obj.Tstats[1] ≈ 0.13 atol=0.01
+
+   
 end
