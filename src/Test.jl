@@ -34,16 +34,16 @@ mutable struct NPTVGC_test
         weights = "e"
         filter = "smoothing"
         pvals = Vector{Float64}[]  # Initialize as an empty array of Float64 arrays
-        γ = 1.0
+        γ = 0.90
         a_γ = 0.5
-        b_γ = 1
+        b_γ = 0.99999
         ϵ = 0.5
         a_ϵ = 0.001
         b_ϵ = 4
         # 100, 100, 0.000001, true, true, false,
         max_iter = 100
         max_iter_outer = 100
-        g_tol = 0.000001
+        g_tol = 0.0001
         show_trace = true
         show_warnings = true
         silent = false

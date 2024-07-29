@@ -26,6 +26,7 @@ export
        NPTVGC
 # Weights functions
        weights!
+       single_cv_smooth_weight!
 # Preprocessing functions
        prefilter
        uniform
@@ -38,6 +39,7 @@ export
 # CVLLK functions
         lik_cv
         total_likelihoods!
+        
 # Estimate functions
         estimate_LDE
 # Utils functions

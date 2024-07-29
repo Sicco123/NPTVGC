@@ -70,3 +70,31 @@ function weights!(time::Tuple{Int, Int}, g::Float64, type_::String, filter_::Str
     return w
 end
 
+
+function single_cv_smooth_weight!(time::Tuple{Int, Int}, g::Float64, N::Int)
+    """
+    Calculate weights for filtering or smoothing operations.
+
+    Parameters:
+    - time : Tuple of Int
+        Contains two elements, (s, t)
+    - g : Float64
+        Smoothing parameter
+    - type_ : String
+        'e' for exponential, 'q' for quadratic
+    - filter_ : String
+        'filtering', 'smoothing', or 'CVsmo'
+    - i : Int
+        Index of the weight to calculate
+
+    Returns:
+    Float64
+        Weight at index i
+    """
+    
+    w0 = ((1-g) / (2*g-g^time[1]-g^(N-time[1]+1))) * g^abs(time[1] - time[2])
+    
+    # if time[1] == time[2] w0 should equal 0
+ 
+    return w0 
+end
