@@ -6,9 +6,8 @@ function lik_cv(obj, pv)
     γ,ϵ  = pv
     #weights_vec = [weights!((i, obj.ssize), γ, obj.weights, "CVsmo") for i in 1:obj.ssize]
     h_lik = total_likelihoods!(obj.x, obj.y, obj.ssize, obj.lags, obj.lags, ϵ, γ)
-
+  
     L = sum(bounded_log.(h_lik[2:end]))
-
     neg_likelihood = -L / obj.ssize
 
     return neg_likelihood
@@ -18,7 +17,7 @@ end
 
 function total_likelihoods!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64, γ)
     
-    mu = (2.0 * ϵ)
+    mu = 2.0*ϵ
     Cy = zeros(Float64, N)
     Cxy = zeros(Float64, N)
     Cyz = zeros(Float64, N)
@@ -64,7 +63,7 @@ function total_likelihoods!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64, γ)
             end
         end
       
-        h[i] += 2.0 / mu * (Cxyz[i] + Cy[i] + Cxy[i] + Cyz[i]) /w_sum
+        h[i] += (Cxyz[i]/mu^3 + Cy[i]/mu + Cxy[i]/mu^2 + Cyz[i]/mu^2) /w_sum
     
     end
 

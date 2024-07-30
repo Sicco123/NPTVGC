@@ -61,20 +61,46 @@ function estimate_LDE(obj)
         end
     elseif obj.filter == "smoothing"
         p0 = [0.95, 0.55 * std(obj.x[1:obj.offset2-1])]
-        
+    
         p0[1] = inverse_sigmoid_map(p0[1], obj.a_γ, obj.b_γ)
         p0[2] = inverse_sigmoid_map(p0[2], obj.a_ϵ, obj.b_ϵ)
-
+        
+        γs = []
+        ϵs = []
         sm_obj_function(params) = begin
-            γ_transformed, ϵ_transformed,  = params
+            γ_transformed, ϵ_transformed  = params
             ϵ = sigmoid_map(ϵ_transformed, obj.a_ϵ, obj.b_ϵ)
             γ = sigmoid_map(γ_transformed, obj.a_γ, obj.b_γ)
-            
+            # push gamma
+            push!(γs, γ)
+            push!(ϵs, ϵ)
             neg_likelihood = lik_cv(obj, [γ, ϵ])
             neg_likelihood
         end
+        
+        
+        res = optimize(
+            sm_obj_function,
+            p0,
+            NelderMead(),
+            Optim.Options(
+                g_tol=obj.g_tol,
+                iterations=obj.max_iter,
+                outer_iterations=obj.max_iter_outer,
+                show_trace=obj.show_trace,
+                show_warnings=obj.show_warnings,
+            )
+        )
 
-        res = optimize(sm_obj_function, p0, BFGS(), Optim.Options(g_tol=obj.g_tol, iterations=obj.max_iter, outer_iterations=obj.max_iter_outer, show_trace=obj.show_trace, show_warnings=obj.show_warnings))
+        # get unique values of gammas
+        γs = unique(γs)
+        println(γs)
+        ϵs = unique(ϵs)
+        println(ϵs)
+        println(length(γs))
+        println(length(ϵs))
+
+        # res = optimize(sm_obj_function, p0, BFGS(), Optim.Options(g_tol=obj.g_tol, iterations=obj.max_iter, outer_iterations=obj.max_iter_outer, show_trace=obj.show_trace, show_warnings=obj.show_warnings))
 
         γ_res = sigmoid_map(Optim.minimizer(res)[1], obj.a_γ, obj.b_γ)
         ϵ_res = sigmoid_map(Optim.minimizer(res)[2], obj.a_ϵ, obj.b_ϵ)
