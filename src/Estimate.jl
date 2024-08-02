@@ -1,4 +1,4 @@
-function estimate_LDE(obj)
+function estimate_LDE(obj, fix_γ = NaN)
 
     if obj.filter == "filtering"
         if obj.method == "sequential"
@@ -59,21 +59,18 @@ function estimate_LDE(obj)
         else
             error("Method \"$(obj.method)\" not allowed.")
         end
-    elseif obj.filter == "smoothing"
+        # fix_γ = NaN and  fix_γ = NaN
+    elseif obj.filter == "smoothing" && isnan(fix_γ)
         p0 = [0.95, 0.55 * std(obj.x[1:obj.offset2-1])]
     
         p0[1] = inverse_sigmoid_map(p0[1], obj.a_γ, obj.b_γ)
         p0[2] = inverse_sigmoid_map(p0[2], obj.a_ϵ, obj.b_ϵ)
         
-        γs = []
-        ϵs = []
         sm_obj_function(params) = begin
             γ_transformed, ϵ_transformed  = params
             ϵ = sigmoid_map(ϵ_transformed, obj.a_ϵ, obj.b_ϵ)
             γ = sigmoid_map(γ_transformed, obj.a_γ, obj.b_γ)
-            # push gamma
-            push!(γs, γ)
-            push!(ϵs, ϵ)
+
             neg_likelihood = lik_cv(obj, [γ, ϵ])
             neg_likelihood
         end
@@ -82,7 +79,7 @@ function estimate_LDE(obj)
         res = optimize(
             sm_obj_function,
             p0,
-            NelderMead(),
+            BFGS(),
             Optim.Options(
                 g_tol=obj.g_tol,
                 iterations=obj.max_iter,
@@ -92,13 +89,6 @@ function estimate_LDE(obj)
             )
         )
 
-        # get unique values of gammas
-        γs = unique(γs)
-        println(γs)
-        ϵs = unique(ϵs)
-        println(ϵs)
-        println(length(γs))
-        println(length(ϵs))
 
         # res = optimize(sm_obj_function, p0, BFGS(), Optim.Options(g_tol=obj.g_tol, iterations=obj.max_iter, outer_iterations=obj.max_iter_outer, show_trace=obj.show_trace, show_warnings=obj.show_warnings))
 
@@ -108,6 +98,40 @@ function estimate_LDE(obj)
         obj.γ = γ_res
         obj.ϵ = ϵ_res
 
+    elseif obj.filter == "smoothing" && !isnan(fix_γ)
+        p0 = [0.55 * std(obj.x[1:obj.offset2-1])]
+    
+        p0[1] = inverse_sigmoid_map(p0[1], obj.a_ϵ, obj.b_ϵ)
+        
+        sm_obj_function_fixed(params) = begin
+            ϵ_transformed  = params[1]
+            ϵ = sigmoid_map(ϵ_transformed, obj.a_ϵ, obj.b_ϵ)
+            
+            neg_likelihood = lik_cv(obj, [fix_γ, ϵ])
+            neg_likelihood
+        end
+        
+        
+        res = optimize(
+            sm_obj_function_fixed,
+            p0,
+            BFGS(),
+            Optim.Options(
+                g_tol=obj.g_tol,
+                iterations=obj.max_iter,
+                outer_iterations=obj.max_iter_outer,
+                show_trace=obj.show_trace,
+                show_warnings=obj.show_warnings,
+            )
+        )
+
+
+        # res = optimize(sm_obj_function, p0, BFGS(), Optim.Options(g_tol=obj.g_tol, iterations=obj.max_iter, outer_iterations=obj.max_iter_outer, show_trace=obj.show_trace, show_warnings=obj.show_warnings))
+
+        ϵ_res = sigmoid_map(Optim.minimizer(res)[1], obj.a_ϵ, obj.b_ϵ)
+
+        obj.γ = fix_γ
+        obj.ϵ = ϵ_res
        
     else
         error("Filtering approach \"$(obj.filter)\" is not allowed.")
