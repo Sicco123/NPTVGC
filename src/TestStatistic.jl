@@ -215,7 +215,7 @@ function HAC_variance(h, N, m, w)
 
     # Determine autocovariance of h[i]
     for k = 0:K-1
-        cov[k+1] = sum(h[m+k:N] .* h[m:N-k].* w[m+k:N])/sum(w[m+k:N])
+        cov[k+1] = sum(h[m+k:N] .* h[m:N-k])/(N - m - k)
     end
 
     VT2 = 9.0 * dot(ohm, cov)
@@ -272,7 +272,7 @@ function estimate_tv_tstats(obj, s1)
 
     # Compute numerators and vars in a single loop
     for (idx, weights) in enumerate(weights_vec)
-        numerators[idx] = sum(h_vec[obj.lags+1:end] .* weights[obj.lags+1:end])#/(obj.ssize - obj.lags)
+        numerators[idx] = sum(h_vec[obj.lags+1:end])/(obj.ssize - obj.lags)
         h_vec_adjusted = h_vec .- numerators[idx]  # Adjust h_vec inplace if possible
         vars[idx] = HAC_variance(h_vec_adjusted, obj.ssize, obj.lags, weights)
     end
