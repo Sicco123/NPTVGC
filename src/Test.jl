@@ -35,7 +35,7 @@ mutable struct NPTVGC_test
         filter = "smoothing"
         pvals = Vector{Float64}[]  # Initialize as an empty array of Float64 arrays
         γ = 0.90
-        a_γ = 0.5
+        a_γ = 0.85
         b_γ = 0.99999
         ϵ = 0.5
         a_ϵ = 0.001
