@@ -63,7 +63,7 @@ function total_likelihoods!(x, y, N::Int,  ϵ::Float64, γ)
             end
         end
       
-        h[i] += (bounded_log(Cxyz[i]/mu^3/w_sum))# + bounded_log(Cy[i]/mu/w_sum/w_sum) + bounded_log(Cxy[i]/mu^2/w_sum) + bounded_log(Cyz[i]/mu^2/w_sum)) 
+        h[i] += (bounded_log(Cxyz[i]/mu^3/w_sum) + bounded_log(Cy[i]/mu/w_sum/w_sum) + bounded_log(Cxy[i]/mu^2/w_sum) + bounded_log(Cyz[i]/mu^2/w_sum)) 
     
     end
 

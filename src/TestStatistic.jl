@@ -207,6 +207,21 @@ end
 
 
 
+# function HAC_variance(h, N, m, w)
+#     K = floor(Int, sqrt(sqrt(N)))
+
+#     ohm = [1.0; 2.0 * (1.0 .- (1:K-1) / K)]
+#     cov = zeros(Float64, K)
+
+#     # Determine autocovariance of h[i]
+#     for k = 0:K-1
+#         cov[k+1] = sum(h[m+k:N] .* h[m:N-k])/(N - m - k)
+#     end
+
+#     VT2 = 9.0 * dot(ohm, cov)
+#     return VT2
+# end
+
 function HAC_variance(h, N, m, w)
     K = floor(Int, sqrt(sqrt(N)))
 
@@ -215,7 +230,7 @@ function HAC_variance(h, N, m, w)
 
     # Determine autocovariance of h[i]
     for k = 0:K-1
-        cov[k+1] = sum(h[m+k:N] .* h[m:N-k])/(N - m - k)
+        cov[k+1] = sum(h[m+k:N] .* h[m:N-k].* w[m+k:N])/sum(w[m+k:N])
     end
 
     VT2 = 9.0 * dot(ohm, cov)
@@ -265,21 +280,20 @@ function estimate_tv_tstats(obj, s1)
 
     
     h_vec = get_h_vec_weighted!(obj.x, obj.y, obj.ssize, obj.lags, obj.lags, obj.ϵ, weights_vec)
-
     # Initialize the numerators and vars arrays
     numerators = similar(h_vec)  # Using similar to allocate space
     vars = similar(h_vec)
 
     # Compute numerators and vars in a single loop
     for (idx, weights) in enumerate(weights_vec)
-        numerators[idx] = sum(h_vec[obj.lags+1:end])/(obj.ssize - obj.lags)
+        numerators[idx] = sum(h_vec[obj.lags+1:end].*weights[obj.lags+1:end])#(obj.ssize - obj.lags)
         h_vec_adjusted = h_vec .- numerators[idx]  # Adjust h_vec inplace if possible
         vars[idx] = HAC_variance(h_vec_adjusted, obj.ssize, obj.lags, weights)
     end
 
     # Calculate t-values and p-values outside the loop
-    T2_TVALS = numerators .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars)
-    p_T2s = 1 .- cdf.(Normal(0, 1), T2_TVALS)
+    T2_TVALS =  numerators .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars) #numerators .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars)
+    p_T2s = 0.5 .- 0.5.*cdf.(Normal(0, 1), T2_TVALS./sqrt(2)) # 1 .- cdf.(Normal(0, 1), T2_TVALS) #
 
     # Update object properties
     obj.Tstats = T2_TVALS
