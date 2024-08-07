@@ -7,7 +7,7 @@ mutable struct NPTVGC_test
     offset1::Int
     offset2::Int
     weights::Union{Nothing, String}
-    ϵ::Union{Nothing,Float64}
+    ϵ::Union{Nothing,Float64, Vector{Float64}}
     a_ϵ::Union{Nothing, Float64}
     b_ϵ::Union{Nothing, Float64}
     γ::Union{Nothing, Float64}

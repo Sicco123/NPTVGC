@@ -139,6 +139,79 @@ function get_h_vec_weighted!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64, w)
     return h
 end
 
+function get_h_vec_weighted!(x, y, N::Int, m::Int, mmax::Int, ϵ1::Float64,ϵ2::Float64,ϵ3::Float64, w)
+    
+    mu1 = (2.0 * ϵ1)^( 2*mmax)
+    mu2 = (2.0 * ϵ2)^(m)
+    mu3 = (2.0 * ϵ3)^(1 )
+    Cy = zeros(Float64, N)
+    Cxy = zeros(Float64, N)
+    Cyz = zeros(Float64, N)
+    Cxyz = zeros(Float64, N)
+    h = zeros(Float64, N)
+
+
+
+    for i = mmax+1:N
+        Cy[i] = Cxy[i] = Cyz[i] = Cxyz[i] = 0.0
+        for j = mmax+1:N
+            if j != i
+                disx = disy = 0.0
+                for s = 1:m
+                    disx = max(abs(x[i-s] - x[j-s]), disx)
+                end
+                for s = 1:mmax
+                    disy = max(abs(y[i-s] - y[j-s]), disy)
+                end
+                if disy <= ϵ1
+                    dc = w[i][j]*1 # weighted density contributons
+                    Cy[i] += dc
+                    disx <= ϵ2 && (Cxy[i] += dc)
+                    disz = max(abs(y[i] - y[j]), disy)
+                    if disz <= 3
+                        Cyz[i] += dc
+                        disx <= ϵ2 && (Cxyz[i] += dc)
+                    end
+                end
+            end
+        end
+        # Cy[i] /= N - mmax
+        # Cxy[i] /= N - mmax
+        # Cyz[i] /= N - mmax
+        # Cxyz[i] /= N - mmax
+        h[i] += 2.0/(mu1*mu2*mu3) * (Cxyz[i] * Cy[i] - Cxy[i] * Cyz[i]) / 6.0
+    
+    end
+
+    for i = mmax+1:N
+        for j = mmax+1:N
+            if j != i
+                IYij = IXYij = IYZij = IXYZij = 0
+                disx = disy = 0.0
+                for s = 1:m
+                    disx = max(abs(x[i-s] - x[j-s]), disx)
+                end
+                for s = 1:mmax
+                    disy = max(abs(y[i-s] - y[j-s]), disy)
+                end
+                if disy <= ϵ1
+                    dc = w[i][j]*1 # weighted density contributons
+                    IYij = dc
+                    disx <= ϵ2 && (IXYij = dc)
+                    disz = max(abs(y[i] - y[j]), disy)
+                    if disz <= ϵ3
+                        IYZij = dc
+                        disx <= ϵ2 && (IXYZij = dc)
+                    end
+                end
+                h[i] += 2.0 / (mu1*mu2*mu3) * (Cxyz[j] * IYij + IXYZij * Cy[j] - Cxy[j] * IYZij - IXYij * Cyz[j]) / (6.0)
+            end
+        end
+    end
+    return h
+end
+
+
 function get_h_vec_cuda!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64)
     
     mu = (2.0 * ϵ)^(m + 2 * mmax + 1)
@@ -279,7 +352,7 @@ function estimate_tv_tstats(obj, s1)
     weights_vec = [weights!((i, obj.ssize), obj.γ, obj.weights, obj.filter) for i in s1:s2]
 
     
-    h_vec = get_h_vec_weighted!(obj.x, obj.y, obj.ssize, obj.lags, obj.lags, obj.ϵ, weights_vec)
+    h_vec = get_h_vec_weighted!(obj.x, obj.y, obj.ssize, obj.lags, obj.lags, obj.ϵ..., weights_vec)
     # Initialize the numerators and vars arrays
     numerators = similar(h_vec)  # Using similar to allocate space
     vars = similar(h_vec)

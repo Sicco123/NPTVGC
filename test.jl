@@ -1,9 +1,9 @@
 using NPTVGC
-using BenchmarkTools
+#using BenchmarkTools
 using Distributions
 using LinearAlgebra
 using Random
-
+using PrettyTables
 function get_weights(gamma)
     for i in 1:obj.ssize
         w[i] = NPTVGC.weights!((i, 1000), gamma, "e", "CVsmo")
@@ -23,9 +23,22 @@ function calculate_multivariate_log_likelihood(X)
     return log_likelihood
 end
 
+function lik_cv(x, y, pv)
+
+
+    #weights_vec = [weights!((i, obj.ssize), γ, obj.weights, "CVsmo") for i in 1:obj.ssize]
+    h_lik = total_likelihoods!(x, y, size(y)[2],1, 1, pv...)
+
+    L = sum(h_lik)#sum((h_lik[obj.offset1:end-obj.offset1]))
+    neg_likelihood = -L / size(y)[2]
+
+    return neg_likelihood
+end
+
+
+
 
 function total_likelihoods!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64, γ)
-    println(size(y))
     
     mu = 2.0*ϵ
     Cy = zeros(Float64, N)
@@ -49,14 +62,15 @@ function total_likelihoods!(x, y, N::Int, m::Int, mmax::Int, ϵ::Float64, γ)
         w = part_1 .* part_2[mid-t+1:end-t+1]
         w[t] = 0.0
         w_sum = sum(w)
+
         #println(γ)
         #println("sum",w_sum)
         #println(calculate_multivariate_log_likelihood(y[1:1,1:end-1]))
         #println("w", w)
         #println(sum(w.*calculate_multivariate_log_likelihood(y[1:1,1:end-1])))
-        println(w)
-        h[i] +=  sum(w.*calculate_multivariate_log_likelihood(hcat(y[1,2:end],y[1,1:end-1],x[1,2:end])))/w_sum #(Cxyz[i]/mu^3 + Cy[i]/mu + Cxy[i]/mu^2 + Cyz[i]/mu^2) /w_sum
-        break
+
+        h[i] +=  log(sum(w.*calculate_multivariate_log_likelihood(hcat(y[1,2:end],y[1,1:end-1],x[1,2:end])))/w_sum) + log(sum(w.*calculate_multivariate_log_likelihood(hcat(y[1,1:end-1])))/w_sum) + log(sum(w.*calculate_multivariate_log_likelihood(hcat(y[1,1:end-1],x[1,2:end])))/w_sum) + log(sum(w.*calculate_multivariate_log_likelihood(hcat(y[1,2:end],y[1,1:end-1])))/w_sum) #(Cxyz[i]/mu^3 + Cy[i]/mu + Cxy[i]/mu^2 + Cyz[i]/mu^2) /w_sum
+
     
     end
 
@@ -65,22 +79,31 @@ end
 
 
 function main1()
+    grid_size = 10
     # set seed
     Random.seed!(1234)
-    x = randn(1,2000)
-    y = randn(1,2000)
-    y[1:1,2:1001] += 0.5 * x[1:1,1:1000] 
+    x = randn(1,5000)
+    y = randn(1,5000)
+    #y[1,500:end] = y[1,500:end] + ones(size(y[1,500:end])).*20
+    #y[1:1,2:1001] += 0.5 * x[1:1,1:1000] 
     # x = x[1:2000]
     # y = y[2:2001]
     #x = NPTVGC.normalise(x)
     #y = NPTVGC.normalise(y)
     test_obj = NPTVGC.NPTVGC_test(x[1, 1:end], y[1, 1:end])  # Replace with the actual type of your object
     test_obj.filter = "smoothing"
-    test_obj.max_iter = 100
-    test_obj.max_iter_outer = 100
+    test_obj.b_ϵ = 2
+    test_obj.a_ϵ = 0.2
     # Set other properties of obj as needed
 
-    NPTVGC.estimate_LDE(test_obj)
+    println(lik_cv(x, y, [0.5, 0.99999]))
+    
+
+    _, _, neg_lik, results = NPTVGC.estimate_LDE_grid(test_obj, grid_size, grid_size)
+    println("Negative likelihood: ", neg_lik)
+    # print likelihoods in matrix form
+    matrix = reshape([x[3] for x in results], grid_size, grid_size)
+    pretty_table(matrix)
 
     # println(test_obj.γ)
     # println(test_obj.ϵ)
@@ -108,12 +131,12 @@ function main1()
 
     println(test_obj.γ)
     println(test_obj.ϵ)
-    println(p_vals_1)
+    #println(p_vals_1)
     
     test_obj = NPTVGC.NPTVGC_test( y[1, 1:end],x[1, 1:end])
 
 
-    NPTVGC.estimate_LDE(test_obj)
+    NPTVGC.estimate_LDE_grid(test_obj, grid_size, grid_size)
     
     NPTVGC.estimate_tv_tstats(test_obj, 1)
     p_vals_2 = test_obj.pvals
@@ -121,7 +144,7 @@ function main1()
 
     println(test_obj.γ)
     println(test_obj.ϵ)
-    println(p_vals_2)
+    #println(p_vals_2)
    
     # # println("Benchmark time: ", benchmark)
 end
