@@ -280,20 +280,20 @@ end
 
 
 
-# function HAC_variance(h, N, m, w)
-#     K = floor(Int, sqrt(sqrt(N)))
+function HAC_variance(h, N, m)
+    K = floor(Int, sqrt(sqrt(N)))
 
-#     ohm = [1.0; 2.0 * (1.0 .- (1:K-1) / K)]
-#     cov = zeros(Float64, K)
+    ohm = [1.0; 2.0 * (1.0 .- (1:K-1) / K)]
+    cov = zeros(Float64, K)
 
-#     # Determine autocovariance of h[i]
-#     for k = 0:K-1
-#         cov[k+1] = sum(h[m+k:N] .* h[m:N-k])/(N - m - k)
-#     end
+    # Determine autocovariance of h[i]
+    for k = 0:K-1
+        cov[k+1] = sum(h[m+k:N] .* h[m:N-k])/(N - m - k)
+    end
 
-#     VT2 = 9.0 * dot(ohm, cov)
-#     return VT2
-# end
+    VT2 = 9.0 * dot(ohm, cov)
+    return VT2
+end
 
 function HAC_variance(h, N, m, w)
     K = floor(Int, sqrt(sqrt(N)))
@@ -309,6 +309,7 @@ function HAC_variance(h, N, m, w)
     VT2 = 9.0 * dot(ohm, cov)
     return VT2
 end
+
 
 # function estimate_tv_tstats(obj, s1, s2 = nothing)
 #     # test for y does not cause x
@@ -371,5 +372,34 @@ function estimate_tv_tstats(obj, s1)
     # Update object properties
     obj.Tstats = T2_TVALS
     obj.pvals = p_T2s
+    return
+end
+
+function estimate_constant_tstat(obj, s1)
+    # test for y does not cause x
+    s2 = obj.ssize
+
+    # Pre-compute weights and the h vector outside the loop
+    weights_vec = [weights!((i, obj.ssize), obj.γ, obj.weights, obj.filter) for i in s1:s2]
+
+    
+    h_vec = get_h_vec_weighted!(obj.x, obj.y, obj.ssize, obj.lags, obj.lags, obj.ϵ..., weights_vec)
+    # Initialize the numerators and vars arrays
+    numerators = similar(h_vec)  # Using similar to allocate space
+    vars = similar(h_vec)
+
+    # Compute numerators and vars in a single loop
+    numerator = sum(h_vec[obj.lags+1:end])/(obj.ssize - obj.lags)
+    h_vec_adjusted = h_vec .- numerators  # Adjust h_vec inplace if possible
+    var = HAC_variance(h_vec_adjusted, obj.ssize, obj.lags)
+    
+
+    # Calculate t-values and p-values outside the loop
+    T2_TVAL =  numerator .* sqrt(obj.ssize - obj.lags) ./ sqrt(var) #numerators .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars)
+    p_T2 = 0.5 - 0.5*cdf(Normal(0, 1), T2_TVAL/sqrt(2)) # 1 .- cdf.(Normal(0, 1), T2_TVALS) #
+
+    # Update object properties
+    obj.Tstats = [T2_TVAL]
+    obj.pvals = [p_T2]
     return
 end
