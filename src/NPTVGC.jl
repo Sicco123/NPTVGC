@@ -10,6 +10,7 @@ using Distributed
 using ARCHModels
 using Printf
 using Optim
+using LoopVectorization
 
 include("Test.jl")
 include("Weights.jl")
@@ -32,10 +33,12 @@ export
        uniform
        normalise
 # TestStatistic functions
-        get_h_vec!
+        #get_h_vec!
+        get_h_matrix_weighted!
         max
         HAC_variance
         estimate_tv_tstats
+        get_indicator_matrices!
 # CVLLK functions
         lik_cv
         total_likelihoods!
