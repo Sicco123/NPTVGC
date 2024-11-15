@@ -11,6 +11,7 @@ using ARCHModels
 using Printf
 using Optim
 using LoopVectorization
+using CUDA
 
 include("Test.jl")
 include("Weights.jl")
@@ -42,6 +43,8 @@ export
 # CVLLK functions
         lik_cv
         total_likelihoods!
+        lik_cv_cuda
+        launch_total_likelihoods_cuda!
         
 # Estimate functions
         estimate_LDE

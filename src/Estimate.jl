@@ -1,4 +1,4 @@
-function estimate_LDE(obj, fix_γ = NaN, multiple_bandwidth = false)
+function estimate_LDE(obj, fix_γ = NaN, multiple_bandwidth = false, device = "cpu")
    
     if obj.filter == "filtering" && isnan(fix_γ) && !multiple_bandwidth 
         if obj.method == "sequential"
@@ -71,7 +71,11 @@ function estimate_LDE(obj, fix_γ = NaN, multiple_bandwidth = false)
             ϵ = sigmoid_map(ϵ_transformed, obj.a_ϵ, obj.b_ϵ)
             γ = sigmoid_map(γ_transformed, obj.a_γ, obj.b_γ)
 
-            neg_likelihood = lik_cv(obj, [γ, ϵ])
+            if device == "cuda"
+                neg_likelihood = lik_cv_cuda(obj, [γ, ϵ])
+            else
+                neg_likelihood = lik_cv(obj, [γ, ϵ])
+            end
             neg_likelihood
         end
         
@@ -146,7 +150,11 @@ function estimate_LDE(obj, fix_γ = NaN, multiple_bandwidth = false)
             ϵ2 = sigmoid_map(ϵ2_transformed, obj.a_ϵ, obj.b_ϵ)
             ϵ3 = sigmoid_map(ϵ3_transformed, obj.a_ϵ, obj.b_ϵ)
 
-            neg_likelihood = lik_cv(obj, [fix_γ, ϵ1, ϵ2, ϵ3])
+            if device == "cuda"
+                neg_likelihood = lik_cv_cuda(obj, [fix_γ, ϵ1, ϵ2, ϵ3])
+            else
+                neg_likelihood = lik_cv(obj, [fix_γ, ϵ1, ϵ2, ϵ3])
+            end
             neg_likelihood
         end
         
@@ -180,7 +188,7 @@ function estimate_LDE(obj, fix_γ = NaN, multiple_bandwidth = false)
 
 end
 
-function estimate_LDE_grid(obj, grid_size_γ = 3, grid_size_ϵ = 3)
+function estimate_LDE_grid(obj, grid_size_γ = 3, grid_size_ϵ = 3, device = "cpu")
     
     γ_options = range(obj.a_γ, obj.b_γ, length = grid_size_γ)
     ϵ_options = range(obj.a_ϵ, obj.b_ϵ, length = grid_size_ϵ)
@@ -191,7 +199,11 @@ function estimate_LDE_grid(obj, grid_size_γ = 3, grid_size_ϵ = 3)
     # Map the likelihood function over all parameter combinations in parallel
     results = pmap(params) do param
         γ, ϵ = param
-        neg_likelihood = lik_cv(obj, [γ, ϵ])
+        if device == "cuda"
+            neg_likelihood = lik_cv_cuda(obj, [γ, ϵ])
+        else
+            neg_likelihood = lik_cv(obj, [γ, ϵ])
+        end
         (γ, ϵ, neg_likelihood)
     end
     results = collect(results)

@@ -79,11 +79,11 @@ end
 
 
 function main1()
-    grid_size = 10
+    grid_size = 3
     # set seed
     Random.seed!(1234)
-    N = 2000
-    N_2 = 1000
+    N = 100
+    N_2 = 50
     x = randn(1,N)
     y = randn(1,N+1)
     x[1:1,N_2:end] = y[1:1,N_2:end-1] #+ 1 * randn(1,250)
