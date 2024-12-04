@@ -1,4 +1,47 @@
+function get_h_matrix!(x, y,  N::Int, γ, ϵ::Float64  )
 
+    Ay, Axy, Ayz, Axyz = get_indicator_matrices!(x, y, N, ϵ)
+    Cy, Cxy, Cyz, Cxyz = sum(Ay, dims = 2), sum(Axy, dims = 2), sum(Ayz, dims = 2), sum(Axyz, dims = 2)
+
+    Ay, Axy, Ayz, Axyz = @view(Ay[2:end,2:end]), @view(Axy[2:end,2:end]), @view(Ayz[2:end,2:end]), @view(Axyz[2:end,2:end])
+    Cy, Cxy, Cyz, Cxyz = @view(Cy[2:end]), @view(Cxy[2:end]), @view(Cyz[2:end]), @view(Cxyz[2:end])
+    
+    interactions = Matrix{Float64}(undef, size(Ay, 1), N-1)  # Preallocate matrix
+
+    for jdx in 1:N-1
+        interactions[:, jdx] = (Cxyz[jdx] .* Ay[:,jdx]  
+        + Axyz[:,jdx] .* Cy[jdx] 
+            - Cxy[jdx] .* Ayz[:,jdx] 
+            - Axy[:,jdx] .* Cyz[jdx])
+    end
+
+    μ = (2.0 * ϵ)^(4)
+
+    h = zeros(Float64, N, N)
+
+    # Weight calcualtion 
+    # vector N : 1 0 1 : N 
+    weight_reduction = [abs(i - (N-2)) for i in 0:2*(N-2)]
+    weight_reduction = γ.^weight_reduction
+
+    mid = N -1
+
+    h_col_vec = zeros(Float64, N-1)
+    factor = zeros(Float64, N-1)
+
+    h[2:end, 2] +=  2.0/μ .* (1/(N-1)).^2 .* (Cxyz .* Cy .- Cxy .* Cyz)./6.0
+    
+    factor = 2.0 / μ  .* (1/(N-1)) /6.0
+    h_col_vec = sum(interactions, dims=2)./(N-1)  # Vectorized sum of interactions
+    h[2:end, 2] += factor .* h_col_vec
+    
+    # copy the column to the rest of the columns
+    for t in 3:N
+        h[2:end, t] = h[2:end, 2]
+    end
+    
+    return h
+end 
 
 function get_h_matrix_weighted!(x, y,  N::Int, γ, ϵ::Float64  )
 
@@ -128,7 +171,7 @@ function get_h_matrix_weighted_cuda!(x, y,  N::Int, γ, ϵ::Float64  )
     d_factor = CUDA.zeros(Float32, N-1)
     d_w = CUDA.zeros(Float32, N-1)
 
-    threads = 576#threads
+    threads = 64 #128 #576#threads
     blocks = ceil(Int64, (N-1)^2/threads) 
     threshold = 10^-8
     @cuda threads=threads blocks=blocks h_kernel_func!(d_h,d_interactions, d_weight_reduction, d_Cxyz, d_Cy, d_Cxy, d_Cyz, γ, μ, N, mid, threshold) 
@@ -178,24 +221,55 @@ function HAC_variance(h, N, m)
 
 
     # Determine autocovariance of h[i]
-    for k = 0:K-1
-        cov[k+1] = sum(h[m+k:N] .* h[m:N-k])/(N - m - k)
+    for k in 1:K
+        cov[k] = 0.0
+        for i in (m+k):N
+            cov[k] += h[i] * h[i-k+1]  # +1 for Julia's 1-based indexing
+        end
+        cov[k] /= (N - m - k +1)  # +1 for correct denominator in 1-based indexing
     end
 
     VT2 = 9.0 * dot(ohm, cov)
     return VT2
 end
 
+function estimate_constant_tstats(obj)
+    h_matrix = get_h_matrix!(obj.x, obj.y, obj.ssize, obj.γ, obj.ϵ...)
+    
+    h_column_means = mean(h_matrix, dims = 1) * obj.ssize/(obj.ssize - obj.lags)
+ 
+    demeaned_h_matrix = h_matrix .- h_column_means
+    
+
+    vars = similar(h_column_means)
+    vars = mapslices(x -> HAC_variance(x, obj.ssize, obj.lags), demeaned_h_matrix; dims = 1)
+
+
+    # Calculate t-values and p-values outside the loop
+    T2_TVALS =  h_column_means .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars) #numerators .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars)
+    p_T2s = 1 .- cdf.(Normal(0, 1), T2_TVALS) #0.5 .- 0.5.*cdf.(Normal(0, 1), T2_TVALS./sqrt(2)) # 
+
+
+    # Update object properties
+    obj.Tstats = T2_TVALS[1,:]
+    obj.pvals = p_T2s[1,:]
+    return
+end 
 function estimate_tv_tstats(obj; device = "cpu")
     # test for y does not cause x
     s2 = obj.ssize
+
+    if obj.γ == 1.0
+        estimate_constant_tstats(obj)
+        return
+    end
 
     if device == "cuda"
         h_matrix = get_h_matrix_weighted_cuda!(obj.x, obj.y, obj.ssize, obj.γ, obj.ϵ...)
     else 
         h_matrix = get_h_matrix_weighted!(obj.x, obj.y, obj.ssize, obj.γ, obj.ϵ...)
     end
-    h_column_means = mean(h_matrix, dims = 1)
+    h_column_means = mean(h_matrix, dims = 1) * obj.ssize/(obj.ssize - obj.lags)
    
     demeaned_h_matrix = h_matrix .- h_column_means
     
@@ -203,9 +277,11 @@ function estimate_tv_tstats(obj; device = "cpu")
     vars = similar(h_column_means)
     vars = mapslices(x -> HAC_variance(x, obj.ssize, obj.lags), demeaned_h_matrix; dims = 1)
 
+
+
     # Calculate t-values and p-values outside the loop
     T2_TVALS =  h_column_means .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars) #numerators .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars)
-    p_T2s = 0.5 .- 0.5.*cdf.(Normal(0, 1), T2_TVALS./sqrt(2)) # 1 .- cdf.(Normal(0, 1), T2_TVALS) #
+    p_T2s = 1 .- cdf.(Normal(0, 1), T2_TVALS) #0.5 .- 0.5.*cdf.(Normal(0, 1), T2_TVALS./sqrt(2)) # 
 
 
     # Update object properties

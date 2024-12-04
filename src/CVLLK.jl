@@ -68,10 +68,10 @@ function total_likelihoods_kernel!(h, x, y, N, γ, ϵ, float_type, threshold)
             # Calculate weight
             dist_from_mid = abs(mid - t + j - 1)
             
-            weight_reduction = γ^dist_from_mid
+            weight_reduction = 1#γ^dist_from_mid
             
             if weight_reduction > threshold
-                w_j = weight_reduction * part_1 #γ^dist_from_mid
+                w_j = 1#weight_reduction * part_1 #γ^dist_from_mid
                 
                 w_sum_local += w_j
                 
@@ -185,6 +185,7 @@ function total_likelihoods_kernel!(h, x, y, N, γ, ϵ1, ϵ2, ϵ3,  float_type, t
     
     # Calculate part_1 (same for all threads in block)
     part_1 = (1.0 - γ) / (2.0*γ - γ^t - γ^(N-t+1))
+
     
     # Each thread processes its portion of j values
     @inbounds for j = (2+tid-1):nthreads:N
@@ -195,7 +196,7 @@ function total_likelihoods_kernel!(h, x, y, N, γ, ϵ1, ϵ2, ϵ3,  float_type, t
             weight_reduction = γ^dist_from_mid
             
             if weight_reduction > threshold
-                w_j = weight_reduction * part_1 #γ^dist_from_mid
+                w_j =  weight_reduction * part_1 #γ^dist_from_mid
                 
                 w_sum_local += w_j
                 
@@ -265,11 +266,13 @@ function total_likelihoods_kernel!(h, x, y, N, γ, ϵ1, ϵ2, ϵ3,  float_type, t
     return nothing
 end
 
-function launch_total_likelihoods_cuda!(x, y, N, γ, ϵ; float_type= Float32)
+function launch_total_likelihoods_cuda!(x, y, N, γ, ϵ; float_type= Float64)
+
+
     # Configure dimensions - one block per i, many threads per block for j
-    threads_per_block = 32  # Should be power of 2 for reduction
+    threads_per_block = 256  # Should be power of 2 for reduction
     blocks =  min(N - 1, 65535)  # One block per i value (excluding i=1)
-    threshold = 1e-10  # Threshold for weight reduction
+    threshold = 1e-16  # Threshold for weight reduction
     # convert to float32
     x = convert(Array{float_type}, x)
     y = convert(Array{float_type}, y)

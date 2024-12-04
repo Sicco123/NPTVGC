@@ -197,6 +197,7 @@ function estimate_LDE_grid(obj, grid_size_γ = 3, grid_size_ϵ = 3, device = "cp
     params = Iterators.product(γ_options, ϵ_options) |> collect
 
     # Map the likelihood function over all parameter combinations in parallel
+
     results = pmap(params) do param
         γ, ϵ = param
         if device == "cuda"
