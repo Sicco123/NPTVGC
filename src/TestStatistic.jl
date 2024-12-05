@@ -277,8 +277,6 @@ function estimate_tv_tstats(obj; device = "cpu")
     vars = similar(h_column_means)
     vars = mapslices(x -> HAC_variance(x, obj.ssize, obj.lags), demeaned_h_matrix; dims = 1)
 
-
-
     # Calculate t-values and p-values outside the loop
     T2_TVALS =  h_column_means .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars) #numerators .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars)
     p_T2s = 1 .- cdf.(Normal(0, 1), T2_TVALS) #0.5 .- 0.5.*cdf.(Normal(0, 1), T2_TVALS./sqrt(2)) # 
