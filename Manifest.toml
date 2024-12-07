@@ -2,7 +2,7 @@
 
 julia_version = "1.9.2"
 manifest_format = "2.0"
-project_hash = "d64f75f9eaf81256c6d6c0e40ac0963345b409fb"
+project_hash = "683659a48ab6cb2f4d4ef310cd1ae3ca01c70e95"
 
 [[deps.ARCHModels]]
 deps = ["DataFrames", "DataStructures", "DelimitedFiles", "Distributions", "ForwardDiff", "GLM", "HypothesisTests", "LinearAlgebra", "MuladdMacro", "Optim", "PrecompileTools", "Random", "Reexport", "Roots", "SpecialFunctions", "StableRNGs", "Statistics", "StatsBase", "StatsFuns", "StatsModels"]

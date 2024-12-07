@@ -13,6 +13,7 @@ using Optim
 using LoopVectorization
 using CUDA
 
+
 include("Test.jl")
 include("Weights.jl")
 include("Preprocessing.jl")
@@ -20,6 +21,7 @@ include("TestStatistic.jl")
 include("CVLLK.jl")
 include("Estimate.jl")
 include("Utils.jl")
+include("TestStatisticCUDA.jl")
 
 
 # Include all your functions and constants here
@@ -35,11 +37,13 @@ export
        normalise
 # TestStatistic functions
         #get_h_vec!
-        get_h_matrix_weighted!
+        # get_h_matrix_weighted!
         max
-        HAC_variance
+        # HAC_variance
         estimate_tv_tstats
-        get_indicator_matrices!
+        estimate_tv_tstats_cuda
+        estimate_tv_tstats_cpu
+
 # CVLLK functions
         lik_cv
         total_likelihoods!
