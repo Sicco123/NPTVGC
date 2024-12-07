@@ -287,3 +287,36 @@ function estimate_tv_tstats(obj; device = "cpu")
     obj.pvals = p_T2s[1,:]
     return
 end
+
+function estimate_tv_tstats(obj; device = "cpu")
+    # test for y does not cause x
+    s2 = obj.ssize
+
+    if obj.γ == 1.0
+        estimate_constant_tstats(obj)
+        return
+    end
+
+    if device == "cuda"
+        h_matrix = get_h_matrix_weighted_cuda!(obj.x, obj.y, obj.ssize, obj.γ, obj.ϵ...)
+    else 
+        h_matrix = get_h_matrix_weighted!(obj.x, obj.y, obj.ssize, obj.γ, obj.ϵ...)
+    end
+    h_column_means = mean(h_matrix, dims = 1) * obj.ssize/(obj.ssize - obj.lags)
+   
+    demeaned_h_matrix = h_matrix .- h_column_means
+    
+
+    vars = similar(h_column_means)
+    vars = mapslices(x -> HAC_variance(x, obj.ssize, obj.lags), demeaned_h_matrix; dims = 1)
+
+    # Calculate t-values and p-values outside the loop
+    T2_TVALS =  h_column_means .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars) #numerators .* sqrt(obj.ssize - obj.lags) ./ sqrt.(vars)
+    p_T2s = 1 .- cdf.(Normal(0, 1), T2_TVALS) #0.5 .- 0.5.*cdf.(Normal(0, 1), T2_TVALS./sqrt(2)) # 
+
+
+    # Update object properties
+    obj.Tstats = T2_TVALS[1,:]
+    obj.pvals = p_T2s[1,:]
+    return
+end
