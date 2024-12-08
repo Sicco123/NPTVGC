@@ -24,6 +24,7 @@ include("Utils.jl")
 include("TestStatisticCUDA.jl")
 
 
+
 # Include all your functions and constants here
 export 
 # Structs 
@@ -42,6 +43,7 @@ export
         # HAC_variance
         estimate_tv_tstats
         estimate_tv_tstats_cuda
+        estimate_tv_tstats_cuda_timed
         estimate_tv_tstats_cpu
 
 # CVLLK functions

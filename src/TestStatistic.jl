@@ -1,47 +1,47 @@
-# function get_h_matrix!(x, y,  N::Int, γ, ϵ::Float64  )
+function get_h_matrix!(x, y,  N::Int, γ, ϵ::Float64  )
 
-#     Ay, Axy, Ayz, Axyz = get_indicator_matrices!(x, y, N, ϵ)
-#     Cy, Cxy, Cyz, Cxyz = sum(Ay, dims = 2), sum(Axy, dims = 2), sum(Ayz, dims = 2), sum(Axyz, dims = 2)
+    Ay, Axy, Ayz, Axyz = get_indicator_matrices!(x, y, N, ϵ)
+    Cy, Cxy, Cyz, Cxyz = sum(Ay, dims = 2), sum(Axy, dims = 2), sum(Ayz, dims = 2), sum(Axyz, dims = 2)
 
-#     Ay, Axy, Ayz, Axyz = @view(Ay[2:end,2:end]), @view(Axy[2:end,2:end]), @view(Ayz[2:end,2:end]), @view(Axyz[2:end,2:end])
-#     Cy, Cxy, Cyz, Cxyz = @view(Cy[2:end]), @view(Cxy[2:end]), @view(Cyz[2:end]), @view(Cxyz[2:end])
+    Ay, Axy, Ayz, Axyz = @view(Ay[2:end,2:end]), @view(Axy[2:end,2:end]), @view(Ayz[2:end,2:end]), @view(Axyz[2:end,2:end])
+    Cy, Cxy, Cyz, Cxyz = @view(Cy[2:end]), @view(Cxy[2:end]), @view(Cyz[2:end]), @view(Cxyz[2:end])
     
-#     interactions = Matrix{Float64}(undef, size(Ay, 1), N-1)  # Preallocate matrix
+    interactions = Matrix{Float64}(undef, size(Ay, 1), N-1)  # Preallocate matrix
 
-#     for jdx in 1:N-1
-#         interactions[:, jdx] = (Cxyz[jdx] .* Ay[:,jdx]  
-#         + Axyz[:,jdx] .* Cy[jdx] 
-#             - Cxy[jdx] .* Ayz[:,jdx] 
-#             - Axy[:,jdx] .* Cyz[jdx])
-#     end
+    for jdx in 1:N-1
+        interactions[:, jdx] = (Cxyz[jdx] .* Ay[:,jdx]  
+        + Axyz[:,jdx] .* Cy[jdx] 
+            - Cxy[jdx] .* Ayz[:,jdx] 
+            - Axy[:,jdx] .* Cyz[jdx])
+    end
 
-#     μ = (2.0 * ϵ)^(4)
+    μ = (2.0 * ϵ)^(4)
 
-#     h = zeros(Float64, N, N)
+    h = zeros(Float64, N, N)
 
-#     # Weight calcualtion 
-#     # vector N : 1 0 1 : N 
-#     weight_reduction = [abs(i - (N-2)) for i in 0:2*(N-2)]
-#     weight_reduction = γ.^weight_reduction
+    # Weight calcualtion 
+    # vector N : 1 0 1 : N 
+    weight_reduction = [abs(i - (N-2)) for i in 0:2*(N-2)]
+    weight_reduction = γ.^weight_reduction
 
-#     mid = N -1
+    mid = N -1
 
-#     h_col_vec = zeros(Float64, N-1)
-#     factor = zeros(Float64, N-1)
+    h_col_vec = zeros(Float64, N-1)
+    factor = zeros(Float64, N-1)
 
-#     h[2:end, 2] +=  2.0/μ .* (1/(N-1)).^2 .* (Cxyz .* Cy .- Cxy .* Cyz)./6.0
+    h[2:end, 2] +=  2.0/μ .* (1/(N-1)).^2 .* (Cxyz .* Cy .- Cxy .* Cyz)./6.0
     
-#     factor = 2.0 / μ  .* (1/(N-1)) /6.0
-#     h_col_vec = sum(interactions, dims=2)./(N-1)  # Vectorized sum of interactions
-#     h[2:end, 2] += factor .* h_col_vec
+    factor = 2.0 / μ  .* (1/(N-1)) /6.0
+    h_col_vec = sum(interactions, dims=2)./(N-1)  # Vectorized sum of interactions
+    h[2:end, 2] += factor .* h_col_vec
     
-#     # copy the column to the rest of the columns
-#     for t in 3:N
-#         h[2:end, t] = h[2:end, 2]
-#     end
+    # copy the column to the rest of the columns
+    for t in 3:N
+        h[2:end, t] = h[2:end, 2]
+    end
     
-#     return h
-# end 
+    return h
+end 
 
 # function get_h_matrix_weighted!(x, y,  N::Int, γ, ϵ::Float64  )
 
