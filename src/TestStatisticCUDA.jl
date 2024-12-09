@@ -1,111 +1,226 @@
 function estimate_tv_tstats_cuda_timed(obj)
-    timings = Dict{String, Float64}()
+     # Initialize timing dictionaries
+     total_times = Dict{String, Float64}()
+     per_iteration_times = Dict{String, Vector{Float64}}()
+     
+     x = obj.x
+     y = obj.y
+     N = length(x)
+     ϵ = obj.ϵ
+     γ = obj.γ
+ 
+     # Time initialization
+     init_time = @elapsed begin
+         x_d = CuArray{Float32}(x)
+         y_d = CuArray{Float32}(y)
+         ϵ = Float32(ϵ)
+         γ = Float32(γ)
+         
+         n_tests = N-1
+         T2_TVALS = Vector{Float32}(undef, n_tests)
+         p_T2s = Vector{Float32}(undef, n_tests)
+         
+         mid = N-1
+         weight_reduction = Vector{Float32}(undef, 2*(N-2)+1)
+         @inbounds for i in 0:2*(N-2)
+             weight_reduction[i+1] = Float32(γ^abs(i - (N-2)))
+         end
+         weight_reduction = CuArray{Float32}(weight_reduction)
+ 
+         Cy = CUDA.zeros(Float32, N)
+         Cxy = CUDA.zeros(Float32, N)
+         Cyz = CUDA.zeros(Float32, N)
+         Cxyz = CUDA.zeros(Float32, N)
+         h = CUDA.zeros(Float32, N)
+
+         max_blocks = min(cld(N-1, 256), 1024)
+         output_buffer = CUDA.zeros(Float32, max_blocks)
+         
+         h_weighted = CUDA.zeros(Float32, N-1)
+         h_vec_adjusted = CUDA.zeros(Float32, N-1)
+     end
+     total_times["initialization"] = init_time
+     
+     # Initialize per-iteration timing vectors
+     timing_categories = [
+         "w_sum_calculation",
+         "array_reset",
+         "h_vec_kernel",
+         "cross_terms_kernel",
+         "weighted_h_calculation",
+         "numera_reduction",
+         "h_vec_adjustment",
+         "variance_calculation",
+         "final_stats"
+     ]
+     
+     for category in timing_categories
+         per_iteration_times[category] = Float64[]
+     end
+     
+     # Main loop with timing
+     total_loop_time = @elapsed begin
+         for t in 1:n_tests
+             # Time w_sum calculation
+             t_w_sum = @elapsed begin
+                 w_sum = Float32((1 + γ - γ^t - γ^(N-t)) / (1-γ))
+                 w_start = mid-t+1
+                 w_end = length(weight_reduction)-t+1
+             end
+             push!(per_iteration_times["w_sum_calculation"], t_w_sum)
+             
+             # Time array reset
+             t_reset = @elapsed begin
+                 CUDA.fill!(Cy, 0.0f0)
+                 CUDA.fill!(Cxy, 0.0f0)
+                 CUDA.fill!(Cyz, 0.0f0)
+                 CUDA.fill!(Cxyz, 0.0f0)
+                 CUDA.fill!(h, 0.0f0)
+                 CUDA.fill!(output_buffer, 0.0f0)
+             end
+             push!(per_iteration_times["array_reset"], t_reset)
+             
+             # Time h_vec kernel
+             t_h_vec = @elapsed begin
+                 threads_per_block = 128
+                 blocks = min(N - 1, 65535)
+                 shared_mem_size = 4 * threads_per_block * sizeof(Float32)
+                 
+                 @cuda blocks=blocks threads=threads_per_block shmem=shared_mem_size get_h_vec_kernel!(
+                     x_d, y_d, N, ϵ, view(weight_reduction, w_start:w_end),
+                     w_sum, Cy, Cxy, Cyz, Cxyz, h, Float32(1e-6)
+                 )
+                 # synchronize 
+                 CUDA.synchronize()
+             end
+             push!(per_iteration_times["h_vec_kernel"], t_h_vec)
+             
+             # Time cross terms kernel
+             t_cross = @elapsed begin
+                 shared_mem_size = threads_per_block * sizeof(Float32)
+                 @cuda blocks=blocks threads=threads_per_block shmem=shared_mem_size get_h_vec_cross_terms_kernel!(
+                     x_d, y_d, N, ϵ, view(weight_reduction, w_start:w_end),
+                     w_sum, Cy, Cxy, Cyz, Cxyz, h, Float32(1e-6)
+                 )
+                 CUDA.synchronize()
+             end
+             push!(per_iteration_times["cross_terms_kernel"], t_cross)
+             
+             # Time weighted h calculation
+             t_weighted = @elapsed begin
+                 @cuda threads=128 blocks=ceil(Int, (N-1)/128) compute_h_weighted_kernel!(
+                     h_weighted, h, view(weight_reduction, w_start:w_end), N
+                 )
+                 CUDA.synchronize()
+             end
+             push!(per_iteration_times["weighted_h_calculation"], t_weighted)
+             
+             # Time numera reduction
+             t_numera = @elapsed begin
+                numera = optimized_numera_calculation!(output_buffer, h_weighted, w_sum, N-1)
+                CUDA.synchronize()
+             end
+             push!(per_iteration_times["numera_reduction"], t_numera)
+             
+             # Time h_vec adjustment
+             t_adjust = @elapsed begin
+                 @cuda threads=128 blocks=ceil(Int, (N-1)/128) adjust_h_vec_kernel!(
+                     h_vec_adjusted, h_weighted, numera, N-1
+                 )
+                 CUDA.synchronize()
+             end
+             push!(per_iteration_times["h_vec_adjustment"], t_adjust)
+             
+             # Time variance calculation
+             t_variance = @elapsed begin
+                 h_vec_adjusted_cpu = Array(h_vec_adjusted)
+                 var = HAC_variance_orig(h_vec_adjusted_cpu, N-1, 1)
+                 CUDA.synchronize()    
+            end
+             push!(per_iteration_times["variance_calculation"], t_variance)
+             
+             # Time final statistics
+             t_stats = @elapsed begin
+                 T2_TVALS[t] = numera * sqrt(Float32(N-1)) / sqrt(var)
+                 p_T2s[t] = 1 - cdf(Normal(0, 1), T2_TVALS[t])
+             end
+             push!(per_iteration_times["final_stats"], t_stats)
+         end
+     end
+     total_times["main_loop"] = total_loop_time
+     
+     # Calculate and return timing statistics
+     timing_stats = Dict{String, NamedTuple{(:mean, :std, :min, :max, :total), Tuple{Float64, Float64, Float64, Float64, Float64}}}()
+     
+     for (category, times) in per_iteration_times
+         timing_stats[category] = (
+             mean = mean(times),
+             std = std(times),
+             min = minimum(times),
+             max = maximum(times),
+             total = sum(times)
+         )
+     end
+     
+     return (
+         total_times = total_times,
+         per_operation = timing_stats
+     )
+end
+function reduce_sum_kernel!(output, input, n)
+    # Get thread and block IDs
+    tid = threadIdx().x
+    bid = blockIdx().x
     
-    # Setup timing function
-    function time_section!(section_name, f)
-        time_taken = @elapsed f()
-        timings[section_name] = get(timings, section_name, 0.0) + time_taken
-    end
-
-    x = obj.x
-    y = obj.y
-    N = length(x)
-    ϵ = obj.ϵ
-    γ = obj.γ
-
-    # Data transfer to GPU
-    time_section!("GPU Transfer") do
-        x_d = CuArray{Float32}(x)
-        y_d = CuArray{Float32}(y)
-        ϵ = Float32(ϵ)
-        γ = Float32(γ)
+    # Shared memory for block-level reduction
+    shared_mem = @cuDynamicSharedMem(Float32, 256)  # Using fixed 256 threads
+    
+    # Initialize local sum
+    local_sum = Float32(0)
+    
+    # Grid-stride loop to handle large arrays
+    i = tid + (bid-1) * blockDim().x
+    while i <= n
+        local_sum += input[i]
+        i += blockDim().x * gridDim().x
     end
     
-    n_tests = N-1
-    T2_TVALS = Vector{Float32}(undef, n_tests)
-    p_T2s = Vector{Float32}(undef, n_tests)
+    # Load into shared memory
+    shared_mem[tid] = local_sum
+    sync_threads()
     
-    # Weight calculation
-    time_section!("Weight Calculation") do
-        mid = N-1
-        weight_reduction = Vector{Float32}(undef, 2*(N-2)+1)
-        @inbounds for i in 0:2*(N-2)
-            weight_reduction[i+1] = Float32(γ^abs(i - (N-2)))
+    # Perform reduction in shared memory
+    for s in 128:-1:1
+        if tid <= s
+            shared_mem[tid] += shared_mem[tid + s]
         end
-        weight_reduction = CuArray{Float32}(weight_reduction)
+        sync_threads()
     end
-
-    # Array allocation
-    time_section!("Array Allocation") do
-        Cy = CUDA.zeros(Float32, N)
-        Cxy = CUDA.zeros(Float32, N)
-        Cyz = CUDA.zeros(Float32, N)
-        Cxyz = CUDA.zeros(Float32, N)
-        h = CUDA.zeros(Float32, N)
-        h_weighted = CUDA.zeros(Float32, N-1)
-        h_vec_adjusted = CUDA.zeros(Float32, N-1)
+    
+    # Write result for this block
+    if tid == 1
+        output[bid] = shared_mem[1]
     end
-
-    for t in 1:n_tests
-        time_section!("Main Kernel") do
-            w_sum = Float32((1 + γ - γ^t - γ^(N-t)) / (1-γ))
-            w_start = mid-t+1
-            w_end = length(weight_reduction)-t+1
-            
-            CUDA.fill!(Cy, 0.0f0)
-            CUDA.fill!(Cxy, 0.0f0)
-            CUDA.fill!(Cyz, 0.0f0)
-            CUDA.fill!(Cxyz, 0.0f0)
-            CUDA.fill!(h, 0.0f0)
-            
-            threads_per_block = 128
-            blocks = min(N - 1, 65535)
-            shared_mem_size = 4 * threads_per_block * sizeof(Float32)
-            
-            @cuda blocks=blocks threads=threads_per_block shmem=shared_mem_size get_h_vec_kernel!(
-                x_d, y_d, N, ϵ, view(weight_reduction, w_start:w_end),
-                w_sum, Cy, Cxy, Cyz, Cxyz, h, weight_threshold
-            )
-        end
-
-        time_section!("Cross Terms") do
-            @cuda blocks=blocks threads=threads_per_block shmem=shared_mem_size get_h_vec_cross_terms_kernel!(
-                x_d, y_d, N, ϵ, view(weight_reduction, w_start:w_end),
-                w_sum, Cy, Cxy, Cyz, Cxyz, h, weight_threshold
-            )
-        end
-
-        time_section!("H Weighted") do
-            @cuda threads=128 blocks=ceil(Int, (N-1)/128) compute_h_weighted_kernel!(
-                h_weighted, h, view(weight_reduction, w_start:w_end), N
-            )
-            numera = CUDA.reduce(+,h_weighted)/(w_sum)
-        end
-
-        time_section!("Final Calculations") do
-            @cuda threads=128 blocks=ceil(Int, (N-1)/128) adjust_h_vec_kernel!(
-                h_vec_adjusted, h_weighted, numera, N-1
-            )
-            h_vec_adjusted_cpu = Array(h_vec_adjusted)
-            var = HAC_variance_orig(h_vec_adjusted_cpu, N-1, 1)
-            T2_TVALS[t] = numera * sqrt(Float32(N-1)) / sqrt(var)
-            p_T2s[t] = 1 - cdf(Normal(0, 1), T2_TVALS[t])
-        end
-    end
-
-    obj.Tstats = T2_TVALS
-    obj.pvals = p_T2s
-
-    # Print timing results
-    println("\nTiming Results:")
-    for (section, time) in sort(collect(timings), by=x->x[2], rev=true)
-        println("$section: $(round(time, digits=4)) seconds")
-    end
-
-    return timings
+    
+    return nothing
 end
 
-function estimate_tv_tstats_cuda(obj)
+function optimized_numera_calculation!(output, h_weighted, w_sum, N)
+    threads = 256
+    blocks = min(cld(N, threads), 1024)
+    shmem = threads * sizeof(Float32)
+    
+    # Launch kernel for first reduction
+    @cuda threads=threads blocks=blocks shmem=shmem reduce_sum_kernel!(output, h_weighted, N)
+    
+    # Get final sum from output array
+    result = Array(output)[1:blocks] |> sum
+    
+    return result / w_sum
+end
+
+
+function estimate_tv_windowed_tstats_cuda(obj)
 
     x = obj.x
     y = obj.y
@@ -128,11 +243,152 @@ function estimate_tv_tstats_cuda(obj)
     
     # Pre-calculate weight reduction array once
     mid = N-1
+    weight_reduction_cpu = Vector{Float32}(undef, 2*(N-2)+1)
+    @inbounds for i in 0:2*(N-2)
+        weight_reduction_cpu[i+1] = Float32(γ^abs(i - (N-2)))
+    end
+    weight_reduction_squares_cpu = weight_reduction_cpu.^2
+    
+    weight_reduction = CuArray{Float32}(weight_reduction_cpu)
+    weight_reduction_squares = CuArray{Float32}(weight_reduction_squares_cpu)
+
+    # Pre-allocate reusable arrays on GPU
+    Cy = CUDA.zeros(Float32, N)
+    Cxy = CUDA.zeros(Float32, N)
+    Cyz = CUDA.zeros(Float32, N)
+    Cxyz = CUDA.zeros(Float32, N)
+    h = CUDA.zeros(Float32, N)
+    
+    # Pre-allocate intermediate arrays on GPU
+    h_weighted = CUDA.zeros(Float32, N-1)
+    h_vec_adjusted = CUDA.zeros(Float32, N-1)
+    
+    # Define threshold
+    weight_threshold = Float32(1e-6)
+ 
+    
+    window_size = Int(round((1 + γ - γ^(N/2) - γ^(N-N/2)) / (1-γ)))
+    window_size = min(window_size, N-1)
+    # make even 
+    if window_size % 2 != 0
+        window_size += 1
+    end
+    half_window = Int(window_size/2)
+
+    for t in 1+half_window:n_tests-half_window
+        
+
+        ### ESTIMATION of DENSITIES
+        # Calculate w_sum
+        w_sum = Float32((1 + γ - γ^t - γ^(N-t)) / (1-γ))
+
+
+        # Get window indices
+        w_start = mid-t+1
+        w_end = length(weight_reduction)-t+1
+        
+        # Reset arrays
+        CUDA.fill!(Cy, 0.0f0)
+        CUDA.fill!(Cxy, 0.0f0)
+        CUDA.fill!(Cyz, 0.0f0)
+        CUDA.fill!(Cxyz, 0.0f0)
+        CUDA.fill!(h, 0.0f0)
+        
+  
+        # Calculate optimal thread and block counts
+        threads_per_block = 128  # Should be power of 2 for reduction
+        blocks =  min(N - 1, 65535)  # One block per i value (excluding i=1)
+        shared_mem_size = 4 * threads_per_block * sizeof(Float32)  # Five arrays for reductions
+        
+        # Launch kernel with adjusted parameters
+        @cuda blocks=blocks threads=threads_per_block shmem=shared_mem_size get_h_vec_kernel!(
+            x_d, y_d, N, ϵ, view(weight_reduction, w_start:w_end),
+            w_sum, Cy, Cxy, Cyz, Cxyz, h, weight_threshold
+        )
+
+        shared_mem_size = threads_per_block * sizeof(Float32)  # Five arrays for reductions
+        
+        # Add cross terms 
+        @cuda blocks=blocks threads=threads_per_block shmem=shared_mem_size get_h_vec_cross_terms_kernel!(
+        x_d, y_d, N, ϵ, view(weight_reduction, w_start:w_end),
+        w_sum, Cy, Cxy, Cyz, Cxyz, h, weight_threshold
+        )
+
+        ### CALCULATION OF T-STATS
+
+        window_start = t-half_window
+        window_end = t+half_window-1
+
+
+        # Calculate numera using reduction
+
+        numera = CUDA.reduce(+,view(h[window_start:window_end]))/(2*half_window) 
+    
+
+        # Adjust h_vec in parallel
+        # @cuda threads=128 blocks=ceil(Int, (N-1)/128) adjust_h_vec_kernel!(
+        #     h_vec_adjusted, h_weighted, numera, N-1
+        # )
+        @cuda threads=128 blocks=ceil(Int, (N-1)/128) adjust_h_vec_kernel!(
+            view(h_vec_adjusted[window_start:window_end ]), view(h[window_start:window_end ]), numera, window_size-1
+        )
+        
+
+        # move h_vec_adjusted to CPU
+        h_vec_adjusted_cpu = Array(h_vec_adjusted[window_start:window_end ])
+
+        
+   
+        # Calculate variance using HAC
+        var = HAC_variance_orig(h_vec_adjusted_cpu, window_size-1, 1) #HAC_variance_cuda(h_vec_adjusted, N-1, 1) # 
+
+        # Calculate final statistics on CPU
+        T2_TVALS[t] = numera * sqrt(window_size) / sqrt(var)
+        p_T2s[t] = 1 - cdf(Normal(0, 1), T2_TVALS[t])
+    end
+
+    obj.Tstats = T2_TVALS
+    obj.pvals = p_T2s
+
+    return 
+end
+
+
+function estimate_tv_tstats_cuda(obj)
+
+    x = obj.x
+    y = obj.y
+    N = length(x)
+    ϵ = obj.ϵ
+    γ = obj.γ
+
+
+    # convert to Float32
+    x_d = CuArray{Float32}(x)
+    y_d = CuArray{Float32}(y)
+    ϵ = Float32(ϵ)
+    γ = Float32(γ)
+
+    
+    # Pre-allocate output arrays on CPU (will transfer results back)
+    n_tests = N-1 
+    if γ == 1.0
+        n_tests = 1
+    end
+    T2_TVALS = Vector{Float32}(undef, n_tests)
+    p_T2s = Vector{Float32}(undef, n_tests)
+    
+    # Pre-calculate weight reduction array once
+    mid = N-1
     weight_reduction = Vector{Float32}(undef, 2*(N-2)+1)
     @inbounds for i in 0:2*(N-2)
         weight_reduction[i+1] = Float32(γ^abs(i - (N-2)))
     end
+    weight_reduction_squares = weight_reduction.^2
+    
     weight_reduction = CuArray{Float32}(weight_reduction)
+    weight_reduction_squares = CuArray{Float32}(weight_reduction_squares)
+
 
     # Pre-allocate reusable arrays on GPU
     Cy = CUDA.zeros(Float32, N)
@@ -155,7 +411,8 @@ function estimate_tv_tstats_cuda(obj)
         
         # Calculate w_sum
         w_sum = Float32((1 + γ - γ^t - γ^(N-t)) / (1-γ))
-        
+
+
         # Get window indices
         w_start = mid-t+1
         w_end = length(weight_reduction)-t+1
@@ -201,21 +458,35 @@ function estimate_tv_tstats_cuda(obj)
     
 
         # Adjust h_vec in parallel
+        # @cuda threads=128 blocks=ceil(Int, (N-1)/128) adjust_h_vec_kernel!(
+        #     h_vec_adjusted, h_weighted, numera, N-1
+        # )
         @cuda threads=128 blocks=ceil(Int, (N-1)/128) adjust_h_vec_kernel!(
-            h_vec_adjusted, h_weighted, numera, N-1
+            h_vec_adjusted, h, numera, N-1
         )
-
+        
 
         # move h_vec_adjusted to CPU
         h_vec_adjusted_cpu = Array(h_vec_adjusted)
+
         
         # Calculate variance using HAC
-        var = HAC_variance_orig(h_vec_adjusted_cpu, N-1, 1) #HAC_variance_cuda(h_vec_adjusted, N-1, 1) # 
-
+        var = HAC_variance_weighted(h_vec_adjusted_cpu, N-1, 1, Array(view(weight_reduction, w_start:w_end)), w_sum) #HAC_variance_cuda(h_vec_adjusted, N-1, 1) # 
 
         # Calculate final statistics on CPU
-        T2_TVALS[t] = numera * sqrt(Float32(N-1 )) / sqrt(var)
+        w_normal_2 = (1/w_sum)^2*CUDA.reduce(+,weight_reduction_squares[w_start:w_end])
+
+        T2_TVALS[t] = numera / sqrt(w_normal_2*var)
         p_T2s[t] = 1 - cdf(Normal(0, 1), T2_TVALS[t])
+
+   
+    end
+
+    if γ == 1.0
+        for t in 2:n_tests
+            T2_TVALS[t] = T2_TVALS[1]
+            p_T2s[t] = p_T2s[1]
+        end
     end
 
     obj.Tstats = T2_TVALS
@@ -467,4 +738,26 @@ function HAC_covariance_kernel!(cov, h, N, m, K)
     end
     
     return nothing
+end
+
+function HAC_variance_weighted(h, N, m, w, w_sum)
+    K = floor(Int, sqrt(sqrt(N)))
+
+    ohm = Float32[1.0f0; 2.0f0 * (1.0f0 .- (1:K-1) / K)]
+    cov = zeros(Float32, K)
+
+    # Determine autocovariance of h[i]
+    w_k_sum = 0.0f0
+    @inbounds for k in 1:K
+        cov[k] = 0.0f0
+        w_k_sum += w[k]
+        for i in (m+k):N
+            cov[k] += w[i]*h[i] * h[i-k+1]  # +1 for Julia's 1-based indexing
+        end
+        cov[k] /= (w_sum - m - w_k_sum +1)  # +1 for correct denominator in 1-based indexing
+    end
+
+    VT2 = 9.0f0 * dot(ohm, cov)
+
+    return VT2
 end

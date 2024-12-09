@@ -528,5 +528,6 @@ function HAC_variance_orig(h, N, m)
     end
 
     VT2 = 9.0f0 * dot(ohm, cov)
+
     return VT2
 end
